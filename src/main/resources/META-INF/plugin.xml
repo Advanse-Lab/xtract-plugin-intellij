@@ -31,4 +31,26 @@
     <extensions defaultExtensionNs="com.intellij">
 
     </extensions>
+
+    <depends>com.intellij.java</depends>
+
+    <actions>
+        <group
+                id="AnalyzeMethodRefactoringRecommendation"
+                text="Analyze Method for Refactoring Opportunities"
+                description="Analyze method code for refactoring opportunities"
+                popup="true">
+            <add-to-group
+                    group-id="EditorPopupMenu"
+                    anchor="after"
+                    relative-to-action="RefactoringMenu"/>
+            <action
+                    id="br.ufscar.advanse.xtractpluginintellij.AnalyzeMethodRefactoringAction"
+                    class="br.ufscar.advanse.xtractpluginintellij.AnalyzeMethodRefactoringAction"
+                    text="Extract Method"
+                    description="Extract method">
+            </action>
+        </group>
+    </actions>
+
 </idea-plugin>
