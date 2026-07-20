@@ -24,6 +24,8 @@ dependencies {
         // Add necessary plugin dependencies for compilation here, example:
          bundledPlugin("com.intellij.java")
     }
+    implementation("com.github.javaparser:javaparser-core:3.25.5")
+    implementation("com.github.mauricioaniche:ck:0.6.3")
 }
 
 intellijPlatform {
