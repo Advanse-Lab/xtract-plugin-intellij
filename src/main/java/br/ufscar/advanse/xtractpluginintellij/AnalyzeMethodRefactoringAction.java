@@ -6,6 +6,8 @@ import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import org.jetbrains.annotations.NotNull;
@@ -21,10 +23,6 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent anActionEvent) {
-
-        String messagePopUp = "Plugin called successfully!";
-
-        Messages.showMessageDialog(anActionEvent.getProject(), messagePopUp, "Extract Method", Messages.getInformationIcon());
 
         // Get required data keys
         Project project = anActionEvent.getProject();
@@ -54,6 +52,7 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
 
         String selected_text = selectionModel.getSelectedText();
 
+        // Remove selection from code
         selectionModel.removeSelection();
 
         System.out.println("startPosition = " + startPosition);
@@ -67,38 +66,54 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
         System.out.println(selected_text);
         System.out.println("end selected_text");
 
-        Properties properties = new Properties();
+        new Task.Backgroundable(project, "Calling API", true) {
+            @Override
+            public void run(@NotNull ProgressIndicator progressIndicator) {
+                Properties properties = new Properties();
 
-        try (InputStream input = getClass().getClassLoader().getResourceAsStream("config.properties")) {
-            if (input == null) {
-                throw new FileNotFoundException("config.properties not found");
+                try (InputStream input = getClass().getClassLoader().getResourceAsStream("config.properties")) {
+                    if (input == null) {
+                        throw new FileNotFoundException("config.properties not found");
+                    }
+                    properties.load(input);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+
+                String baseUrl = properties.getProperty("XTRACT_BASE_URL", "http://localhost:8000");
+                System.out.println("baseUrl = " + baseUrl);
+
+                HttpClient httpClient = HttpClient.newHttpClient();
+                HttpRequest request = HttpRequest
+                        .newBuilder(URI.create(baseUrl + "/health"))
+                        .GET()
+                        .setHeader("Content-Type", "application/json")
+                        .build();
+
+                HttpResponse<String> apiResponse;
+                try {
+                    apiResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                } catch (IOException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                int statusCode = apiResponse.statusCode();
+                String responseBody = apiResponse.body();
+
+                System.out.println("HTTP status = " + statusCode);
+                System.out.println("apiResponse = " + apiResponse);
+                System.out.println("responseBody = " + responseBody);
             }
-            properties.load(input);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
 
-        String baseUrl = properties.getProperty("XTRACT_BASE_URL", "http://localhost:8000");
-        System.out.println("baseUrl = " + baseUrl);
+            @Override
+            public void onSuccess() {
+                Messages.showMessageDialog(anActionEvent.getProject(), "API called successfully!", "Extract Method", Messages.getInformationIcon());
+            }
 
-        HttpClient httpClient = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest
-                .newBuilder(URI.create(baseUrl + "/health"))
-                .GET()
-                .setHeader("Content-Type", "application/json")
-                .build();
-
-        HttpResponse<String> apiResponse;
-        try {
-            apiResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (IOException | InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-        int statusCode = apiResponse.statusCode();
-        String responseBody = apiResponse.body();
-
-        System.out.println("HTTP status = " + statusCode);
-        System.out.println("apiResponse = " + apiResponse);
-        System.out.println("responseBody = " + responseBody);
+            @Override
+            public void onCancel() {
+                // Called if the user clicks the cancel button on the progress bar
+                System.out.println("Operation cancelled by user.");
+            }
+        }.queue();
     }
 }
