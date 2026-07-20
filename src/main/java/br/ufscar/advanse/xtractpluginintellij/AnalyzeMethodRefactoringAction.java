@@ -10,6 +10,13 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.*;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.Properties;
+
 public class AnalyzeMethodRefactoringAction extends AnAction {
 
     @Override
@@ -59,5 +66,39 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
         System.out.println("begin selected_text");
         System.out.println(selected_text);
         System.out.println("end selected_text");
+
+        Properties properties = new Properties();
+
+        try (InputStream input = getClass().getClassLoader().getResourceAsStream("config.properties")) {
+            if (input == null) {
+                throw new FileNotFoundException("config.properties not found");
+            }
+            properties.load(input);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        String baseUrl = properties.getProperty("XTRACT_BASE_URL", "http://localhost:8000");
+        System.out.println("baseUrl = " + baseUrl);
+
+        HttpClient httpClient = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest
+                .newBuilder(URI.create(baseUrl + "/health"))
+                .GET()
+                .setHeader("Content-Type", "application/json")
+                .build();
+
+        HttpResponse<String> apiResponse;
+        try {
+            apiResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        int statusCode = apiResponse.statusCode();
+        String responseBody = apiResponse.body();
+
+        System.out.println("HTTP status = " + statusCode);
+        System.out.println("apiResponse = " + apiResponse);
+        System.out.println("responseBody = " + responseBody);
     }
 }
