@@ -1,5 +1,7 @@
 package br.ufscar.advanse.xtractpluginintellij;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
@@ -13,10 +15,17 @@ import com.intellij.openapi.ui.Messages;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.*;
+import java.lang.reflect.Type;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Base64;
+import java.util.List;
 import java.util.Properties;
 
 import static br.ufscar.advanse.xtractpluginintellij.SliceAnalyzer.fragmentMetricExtractor;
@@ -69,6 +78,11 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
         System.out.println("end selected_text");
 
         new Task.Backgroundable(project, "Calling API", true) {
+
+            String response;
+            String responseBody;
+            XtractApiOutput responseData;
+
             @Override
             public void run(@NotNull ProgressIndicator progressIndicator) {
                 Properties properties = new Properties();
@@ -84,28 +98,6 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
 
                 String baseUrl = properties.getProperty("XTRACT_BASE_URL", "http://localhost:8000");
                 System.out.println("baseUrl = " + baseUrl);
-
-                HttpClient httpClient = HttpClient.newHttpClient();
-
-                // Plugin health check call
-                HttpRequest request = HttpRequest
-                        .newBuilder(URI.create(baseUrl + "/health"))
-                        .GET()
-                        .setHeader("Content-Type", "application/json")
-                        .build();
-
-                HttpResponse<String> apiResponse;
-                try {
-                    apiResponse = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-                } catch (IOException | InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-                int statusCode = apiResponse.statusCode();
-                String responseBody = apiResponse.body();
-
-                System.out.println("HTTP status = " + statusCode);
-                System.out.println("apiResponse = " + apiResponse);
-                System.out.println("responseBody = " + responseBody);
 
                 // Extracting metrics from fragments of method
                 String projectPath = project.getBasePath();
@@ -126,7 +118,76 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                         methodMetricsFileName
                 );
                 long endTime = System.nanoTime();
-                System.out.println(">>>>> Elapsed time of " + ((endTime - startTime) * 1e-9) + " seconds.");
+                System.out.printf(">>>>> Elapsed time of %.5f seconds.\n", (endTime - startTime) * 1e-9);
+
+                // Encode simplified slices file into base64
+                BufferedReader br;
+                try {
+                    br = new BufferedReader(new FileReader(simplifiedSlicesFileName));
+                } catch (FileNotFoundException ex) {
+                    throw new RuntimeException(ex);
+                }
+                List<SliceAnalyzer.SimpleSlice> sample = new Gson().fromJson(br, List.class);
+
+                Type listType = new TypeToken<List<SliceAnalyzer.SimpleSlice>>() {}.getType();
+                String simplifiedSlicesString = new Gson().toJson(sample, listType);
+                String simplifiedSlicesStringBase64Encoded = Base64.getEncoder().encodeToString(
+                        simplifiedSlicesString.getBytes(StandardCharsets.UTF_8)
+                );
+
+                // Encode metrics file into base64
+                Path methodMetricsPath = Paths.get(methodMetricsFileName);
+                String methodMetricsString;
+                String methodMetricsStringBase64Encoded;
+                try {
+                    methodMetricsString = Files.readString(methodMetricsPath, StandardCharsets.UTF_8);
+                    methodMetricsStringBase64Encoded = Base64.getEncoder().encodeToString(
+                            methodMetricsString.getBytes(StandardCharsets.UTF_8)
+                    );
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+
+                progressIndicator.setText("Calling the Refactoring Recommendation API");
+                progressIndicator.setIndeterminate(true);
+
+                try {
+                    XtractApiInput requestData = new XtractApiInput(
+                            simplifiedSlicesStringBase64Encoded,
+                            methodMetricsStringBase64Encoded
+                    );
+                    String requestDataJson = new Gson().toJson(requestData);
+
+                    // Calling the refactoring method API
+                    System.out.println("Calling the Refactoring Recommendation API");
+
+                    HttpRequest.BodyPublisher methodAnalysisRequestBody = HttpRequest.BodyPublishers.ofString(
+                            requestDataJson
+                    );
+
+                    HttpRequest methodAnalysisRequest = HttpRequest
+                            .newBuilder(URI.create(baseUrl + "/time4"))
+                            .POST(methodAnalysisRequestBody)
+                            .setHeader("Content-Type", "application/json")
+                            .build();
+
+                    HttpClient httpClient = HttpClient.newHttpClient();
+                    HttpResponse<String> apiResponse = httpClient.send(methodAnalysisRequest, HttpResponse.BodyHandlers.ofString());
+
+                    // Treating API's response
+                    int statusCode = apiResponse.statusCode();
+                    responseBody = apiResponse.body();
+                    responseData = new Gson().fromJson(responseBody, XtractApiOutput.class);
+
+                    System.out.println("HTTP status: " + statusCode);
+                    System.out.println(responseBody);
+                    System.out.println(responseData.getForestPrediction());
+
+                    System.out.println("Refactoring Recommendation API called successfully");
+
+                } catch (IOException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
             }
 
             @Override
