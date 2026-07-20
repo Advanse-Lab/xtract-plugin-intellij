@@ -19,6 +19,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Properties;
 
+import static br.ufscar.advanse.xtractpluginintellij.SliceAnalyzer.fragmentMetricExtractor;
+
 public class AnalyzeMethodRefactoringAction extends AnAction {
 
     @Override
@@ -84,6 +86,8 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                 System.out.println("baseUrl = " + baseUrl);
 
                 HttpClient httpClient = HttpClient.newHttpClient();
+
+                // Plugin health check call
                 HttpRequest request = HttpRequest
                         .newBuilder(URI.create(baseUrl + "/health"))
                         .GET()
@@ -102,6 +106,27 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                 System.out.println("HTTP status = " + statusCode);
                 System.out.println("apiResponse = " + apiResponse);
                 System.out.println("responseBody = " + responseBody);
+
+                // Extracting metrics from fragments of method
+                String projectPath = project.getBasePath();
+
+                String pluginDirectoryPath = projectPath + "/plugin_data";
+                final File pluginDirectory = new File(pluginDirectoryPath);
+
+                pluginDirectory.mkdirs();
+
+                String simplifiedSlicesFileName = pluginDirectoryPath + "/simplified_slices.json";
+                String methodMetricsFileName = pluginDirectoryPath + "/method_metrics.csv";
+
+                long startTime = System.nanoTime();
+                // FME call
+                fragmentMetricExtractor(
+                        selected_text,
+                        simplifiedSlicesFileName,
+                        methodMetricsFileName
+                );
+                long endTime = System.nanoTime();
+                System.out.println(">>>>> Elapsed time of " + ((endTime - startTime) * 1e-9) + " seconds.");
             }
 
             @Override
