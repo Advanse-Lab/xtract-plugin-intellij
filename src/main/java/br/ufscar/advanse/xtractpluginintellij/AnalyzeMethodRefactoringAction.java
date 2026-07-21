@@ -185,7 +185,7 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                     );
 
                     HttpRequest methodAnalysisRequest = HttpRequest
-                            .newBuilder(URI.create(baseUrl + "/time4"))
+                            .newBuilder(URI.create(baseUrl + "/evaluation"))
                             .POST(methodAnalysisRequestBody)
                             .setHeader("Content-Type", "application/json")
                             .build();
@@ -304,7 +304,7 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                     );
 
                     HttpRequest methodExplanationRequest = HttpRequest
-                            .newBuilder(URI.create(baseUrl + "/base64/explanation"))
+                            .newBuilder(URI.create(baseUrl + "/explanation"))
                             .POST(explanationRequestBody)
                             .setHeader("Content-Type", "application/json")
                             .build();
