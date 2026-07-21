@@ -1,6 +1,9 @@
 package br.ufscar.advanse.xtractpluginintellij;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import com.google.gson.reflect.TypeToken;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -8,11 +11,21 @@ import com.intellij.openapi.actionSystem.CommonDataKeys;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.*;
 import com.intellij.openapi.editor.markup.*;
+import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.fileEditor.FileEditorManager;
+import com.intellij.openapi.fileEditor.OpenFileDescriptor;
+import com.intellij.openapi.fileTypes.FileType;
+import com.intellij.openapi.fileTypes.FileTypeManager;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.wm.ToolWindow;
+import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.testFramework.LightVirtualFile;
 import com.intellij.ui.JBColor;
+import com.intellij.ui.content.Content;
 import org.jetbrains.annotations.NotNull;
 
 import java.awt.*;
@@ -64,7 +77,7 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
         int endPositionColumn = selectionModel.getSelectionEndPosition().column;
         int endPositionLine = selectionModel.getSelectionEndPosition().line;
 
-        String selected_text = selectionModel.getSelectedText();
+        String selectedCode = selectionModel.getSelectedText();
 
         // Remove selection from code
         selectionModel.removeSelection();
@@ -76,17 +89,18 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
         System.out.println("endPositionColumn = " + endPositionColumn);
         System.out.println("endPositionLine = " + endPositionLine);
 
-        System.out.println("begin selected_text");
-        System.out.println(selected_text);
-        System.out.println("end selected_text");
+        System.out.println("begin selectedCode");
+        System.out.println(selectedCode);
+        System.out.println("end selectedCode");
 
         new Task.Backgroundable(project, "Calling API", true) {
 
-            String recommendationExplanationResponseBody;
-            String response;
-            String responseBody;
-            XtractApiOutput responseData;
-            XtractApiOutput recommendationExplanationResponseData;
+            private String recommendationExplanationResponseBody;
+            private String response;
+            private String responseBody;
+            private XtractApiOutput responseData;
+            private XtractApiOutput recommendationExplanationResponseData;
+            private boolean refactoringOportunity = true;
 
             @Override
             public void run(@NotNull ProgressIndicator progressIndicator) {
@@ -118,7 +132,7 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                 long startTime = System.nanoTime();
                 // FME call
                 fragmentMetricExtractor(
-                        selected_text,
+                        selectedCode,
                         simplifiedSlicesFileName,
                         methodMetricsFileName
                 );
@@ -199,7 +213,10 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                         System.out.println("responseData.isForestPredictionValid(): " + responseData.isForestPredictionValid());
                         System.out.println("responseData.getForestPrediction(): " + responseData.getForestPrediction());
 
-                        if (!responseData.isForestPredictionValid() || responseData.getForestPrediction() <= 0.55) return;
+                        if (!responseData.isForestPredictionValid() || responseData.getForestPrediction() <= 0.55) {
+                            refactoringOportunity = false;
+                            return;
+                        }
 
                         System.out.println("Method is a candidate for refactoring.");
 
@@ -233,15 +250,21 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                         System.out.println("lineEndOffset = " + lineEndOffset);
                         System.out.println("endPositionOffset = " + endPositionOffset);
 
+//                        for (RangeHighlighter highlighter : markupModel.getAllHighlighters()) {
+//                            if (Boolean.TRUE.equals(highlighter.getUserData(RefactoringRecommendationToolWindowFactory.REFACTORING_RECOMMENDATION_HIGHLIGHT_KEY))) {
+//                                markupModel.removeHighlighter(highlighter);
+//                            }
+//                        }
                         markupModel.removeAllHighlighters();
 
-                        markupModel.addRangeHighlighter(
+                        RangeHighlighter rangeHighlighter = markupModel.addRangeHighlighter(
                                 startPositionOffset,
                                 endPositionOffset,
                                 HighlighterLayer.SELECTION - 1,
                                 attributes,
                                 HighlighterTargetArea.EXACT_RANGE
                         );
+                        rangeHighlighter.putUserData(RefactoringRecommendationToolWindowFactory.REFACTORING_RECOMMENDATION_HIGHLIGHT_KEY, true);
 
                         CaretModel caretModel = editor.getCaretModel();
                         ScrollingModel scrollingModel = editor.getScrollingModel();
@@ -256,6 +279,9 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                         // Focus the screen where the cursor is located
                         scrollingModel.scrollToCaret(ScrollType.CENTER_DOWN);
                     });
+
+                    progressIndicator.setText("Calling the Explanation Recommendation API");
+                    progressIndicator.setIndeterminate(true);
 
                     // Second API call, gets the explanation for the selected code for refactoring
                     System.out.println("Calling the Explanation Recommendation API");
@@ -314,6 +340,35 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
 
             @Override
             public void onSuccess() {
+                System.out.println("Explanation Recommendation API called successfully");
+
+                ToolWindow myToolWindow = ToolWindowManager.getInstance(project).getToolWindow("Refactoring Recommendation");
+                if (myToolWindow != null) {
+                    // Activate the tool window if it is not visible
+                    myToolWindow.activate(null);
+
+                    // Access the first content item (tab) and interact with it.
+                    Content content = myToolWindow.getContentManager().getContent(0);
+                    if (content != null) {
+                        System.out.println("refactoringOportunity: " + refactoringOportunity);
+
+                        if (!refactoringOportunity) return;
+
+                        System.out.println("RefactoringRecommendationToolWindowFactory.REFACTORING_RECOMMENDATION_PANEL_OBJ_KEY: " + RefactoringRecommendationToolWindowFactory.REFACTORING_RECOMMENDATION_PANEL_OBJ_KEY);
+                        System.out.println("RefactoringRecommendationToolWindowFactory.REFACTORING_RECOMMENDATION_HIGHLIGHT_KEY: " + RefactoringRecommendationToolWindowFactory.REFACTORING_RECOMMENDATION_HIGHLIGHT_KEY);
+
+                        // Retrieves the reference directly via UserData.
+                        RefactoringRecommendationToolWindowFactory.HtmlPanel panel = content.getUserData(RefactoringRecommendationToolWindowFactory.REFACTORING_RECOMMENDATION_PANEL_OBJ_KEY);
+
+                        if (panel != null) {
+                            String newContent = recommendationExplanationResponseData.getExplicacao();
+                            panel.updateContent(newContent);
+                        } else {
+                            System.out.println("RefactoringRecommendationToolWindowFactory.HtmlPanel is null");
+                        }
+                    }
+                }
+
                 System.out.println("API called successfully!");
             }
 
