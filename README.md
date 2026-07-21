@@ -104,8 +104,8 @@ The **User Interface** layer integrates Xtract into IntelliJ IDEA, allowing deve
 
 Before running Xtract, make sure the following software is installed:
 
-- Java 
-- IntelliJ IDEA 
+- Java 21
+- IntelliJ IDEA Community 2025.1
 - Gradle
 - Git
 
