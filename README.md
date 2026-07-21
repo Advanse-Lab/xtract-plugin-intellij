@@ -18,7 +18,7 @@ following the **W3B criterion (Which, Where, Why, and Benefits)**.
 - Features
 - Demonstration
 - Architecture
-- Installation
+- Installation & Setup
 - Citation
 - License
 
@@ -98,3 +98,15 @@ The architecture of **Xtract** is organized into three modular layers that separ
 
 The **User Interface** layer integrates Xtract into IntelliJ IDEA, allowing developers to request recommendations directly from the IDE. The **Recommendation Engine** orchestrates the recommendation process by extracting software metrics, identifying candidate fragments, applying Machine Learning models, and generating explainable predictions. Finally, the **LLM-based Explanation Service** synthesizes the outputs of previous stages into natural language recommendations following the W3B criterion.
 
+---
+# Installation & Setup
+
+---
+
+# License
+
+This project is licensed under the **MIT License**.
+
+See the [LICENSE](LICENSE) file for complete license information.
+
+---
