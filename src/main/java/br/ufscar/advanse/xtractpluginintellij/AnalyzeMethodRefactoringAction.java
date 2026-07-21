@@ -5,15 +5,17 @@ import com.google.gson.reflect.TypeToken;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.CommonDataKeys;
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.editor.Editor;
-import com.intellij.openapi.editor.SelectionModel;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.editor.*;
+import com.intellij.openapi.editor.markup.*;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
+import com.intellij.ui.JBColor;
 import org.jetbrains.annotations.NotNull;
 
+import java.awt.*;
 import java.io.*;
 import java.lang.reflect.Type;
 import java.net.URI;
@@ -41,6 +43,7 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
 
         if (project == null | editor == null) return;
 
+        Document document = editor.getDocument();
         SelectionModel selectionModel = editor.getSelectionModel();
 
         // Set visibility only in the case of
@@ -185,14 +188,90 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
 
                     System.out.println("Refactoring Recommendation API called successfully");
 
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        if (project.isDisposed() || editor.isDisposed()) return;
+
+                        // PopUp menu that informs user if refactoring of method is needed
+                        Messages.showMessageDialog(anActionEvent.getProject(), getMessagePopUp(), "Extract Method", Messages.getInformationIcon());
+
+                        System.out.println("responseData.isForestPredictionValid(): " + responseData.isForestPredictionValid());
+                        System.out.println("responseData.getForestPrediction(): " + responseData.getForestPrediction());
+
+                        if (!responseData.isForestPredictionValid() || responseData.getForestPrediction() <= 0.55) return;
+
+                        System.out.println("Method is a candidate for refactoring.");
+
+                        MarkupModel markupModel = editor.getMarkupModel();
+
+                        TextAttributes attributes = new TextAttributes();
+                        attributes.setBackgroundColor(new JBColor(
+                                new Color(255, 255, 0, 100),
+                                new Color(255, 255, 0, 50)
+                        ));
+
+                        int lineStartOffset = document.getLineStartOffset(startPositionLine + responseData.getBeginLine() + 2);
+                        int startPositionOffset = lineStartOffset + responseData.getBeginColumn() - 1;
+
+                        int lineEndOffset = document.getLineStartOffset(startPositionLine + responseData.getEndLine() + 2);
+                        int endPositionOffset = lineEndOffset + responseData.getEndColumn();
+
+                        System.out.println("startPosition = " + startPosition);
+                        System.out.println("endPosition = " + endPosition);
+
+                        System.out.println("startPositionLine = " + startPositionLine);
+                        System.out.println("endPositionLine = " + endPositionLine);
+
+                        System.out.println("responseData.getBeginLine() = " + responseData.getBeginLine());
+                        System.out.println("responseData.getBeginColumn() = " + responseData.getBeginColumn());
+                        System.out.println("responseData.getEndLine() = " + responseData.getEndLine());
+                        System.out.println("responseData.getEndColumn() = " + responseData.getEndColumn());
+
+                        System.out.println("lineStartOffset = " + lineStartOffset);
+                        System.out.println("startPositionOffset = " + startPositionOffset);
+                        System.out.println("lineEndOffset = " + lineEndOffset);
+                        System.out.println("endPositionOffset = " + endPositionOffset);
+
+                        markupModel.removeAllHighlighters();
+
+                        markupModel.addRangeHighlighter(
+                                startPositionOffset,
+                                endPositionOffset,
+                                HighlighterLayer.SELECTION - 1,
+                                attributes,
+                                HighlighterTargetArea.EXACT_RANGE
+                        );
+
+                        CaretModel caretModel = editor.getCaretModel();
+                        ScrollingModel scrollingModel = editor.getScrollingModel();
+
+                        int targetLine = startPositionLine + responseData.getEndLine() + 2;
+                        int targetColumn = responseData.getEndColumn();
+                        LogicalPosition newPosition = new LogicalPosition(targetLine, targetColumn);
+
+                        // Move cursor at the end of the highlighted code
+                        caretModel.moveToLogicalPosition(newPosition);
+
+                        // Focus the screen where the cursor is located
+                        scrollingModel.scrollToCaret(ScrollType.CENTER_DOWN);
+                    });
+
                 } catch (IOException | InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             }
 
+            private String getMessagePopUp() {
+                if (!responseData.isForestPredictionValid()) return "The model identified that Extract Method is not necessary.";
+
+                if (responseData.getForestPrediction() <= 0.55) return "The model identified that Extract Method is not necessary.";
+
+                Float modelPrediction = responseData.getForestPrediction();
+                return "The analyzed method was classified with a " + String.format("%.2f", modelPrediction * 100) + "% probability of requiring refactoring.";
+            }
+
             @Override
             public void onSuccess() {
-                Messages.showMessageDialog(anActionEvent.getProject(), "API called successfully!", "Extract Method", Messages.getInformationIcon());
+                System.out.println("API called successfully!");
             }
 
             @Override
