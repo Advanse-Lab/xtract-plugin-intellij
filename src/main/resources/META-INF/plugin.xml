@@ -53,4 +53,11 @@
         </group>
     </actions>
 
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Refactoring Recommendation"
+                    factoryClass="br.ufscar.advanse.xtractpluginintellij.RefactoringRecommendationToolWindowFactory"
+                    icon="AllIcons.Nodes.Plugin"
+                    anchor="right"/>
+    </extensions>
+
 </idea-plugin>
