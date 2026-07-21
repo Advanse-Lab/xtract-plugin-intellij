@@ -70,7 +70,7 @@ The recommendation follows the **W3B criterion**, informing developers:
 
 # Demonstration
 
-A demonstration video showing the installation, execution, and recommendation process of **Xtract** is available on Zenodo.
+A demonstration video showing the execution and recommendation process of **Xtract** is available on Zenodo.
 
 🎥 **Demonstration Video**
 
