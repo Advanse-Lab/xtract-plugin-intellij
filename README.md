@@ -92,7 +92,7 @@ The architecture of **Xtract** is organized into three modular layers that separ
 
 <p align="center">
 
-<img src="docs/images/architecture.png" width="900">
+<img src="Arquitetura_paper_2.png" width="900">
 
 </p>
 
