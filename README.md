@@ -3,7 +3,7 @@
 ## AI-based Explainable Extract Method Recommendation for IntelliJ IDEA
 
 Xtract is an IntelliJ IDEA plugin that recommends **Extract Method**
-refactorings using Artificial Intelligence (AI), Explainable AI (XAI), and
+refactorings using Pre-trained Language Models(PLM), Explainable AI (XAI), and
 Large Language Models (LLMs).
 
 Unlike traditional recommendation tools that only identify potential
