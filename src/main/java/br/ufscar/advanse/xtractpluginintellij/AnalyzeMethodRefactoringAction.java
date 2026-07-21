@@ -82,9 +82,11 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
 
         new Task.Backgroundable(project, "Calling API", true) {
 
+            String recommendationExplanationResponseBody;
             String response;
             String responseBody;
             XtractApiOutput responseData;
+            XtractApiOutput recommendationExplanationResponseData;
 
             @Override
             public void run(@NotNull ProgressIndicator progressIndicator) {
@@ -161,7 +163,7 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                     );
                     String requestDataJson = new Gson().toJson(requestData);
 
-                    // Calling the refactoring method API
+                    // First API call, identify refactoring is needed and which code fragment should receive Extract Method
                     System.out.println("Calling the Refactoring Recommendation API");
 
                     HttpRequest.BodyPublisher methodAnalysisRequestBody = HttpRequest.BodyPublishers.ofString(
@@ -255,7 +257,48 @@ public class AnalyzeMethodRefactoringAction extends AnAction {
                         scrollingModel.scrollToCaret(ScrollType.CENTER_DOWN);
                     });
 
-                } catch (IOException | InterruptedException e) {
+                    // Second API call, gets the explanation for the selected code for refactoring
+                    System.out.println("Calling the Explanation Recommendation API");
+
+                    XtractApiExplanationInput explanationInputData = new XtractApiExplanationInput(
+                            responseData.getSourceCodeMethod(),
+                            responseData.getFragment(),
+                            responseData.getScore(),
+                            responseData.getProbability(),
+                            responseData.getRankingExplanation()
+                    );
+
+                    System.out.println(responseData.getRankingExplanation());
+                    System.out.println(explanationInputData);
+
+                    String explanationInputDataJson = new Gson().toJson(explanationInputData);
+
+                    HttpRequest.BodyPublisher explanationRequestBody = HttpRequest.BodyPublishers.ofString(
+                            explanationInputDataJson
+                    );
+
+                    HttpRequest methodExplanationRequest = HttpRequest
+                            .newBuilder(URI.create(baseUrl + "/base64/explanation"))
+                            .POST(explanationRequestBody)
+                            .setHeader("Content-Type", "application/json")
+                            .build();
+
+                    HttpResponse<String> recommendationExplanationResponse = httpClient.send(methodExplanationRequest, HttpResponse.BodyHandlers.ofString());
+
+                    // Treating API's response
+                    int methodExplanationStatusCode = recommendationExplanationResponse.statusCode();
+
+                    recommendationExplanationResponseBody = recommendationExplanationResponse.body();
+                    recommendationExplanationResponseData = new Gson().fromJson(recommendationExplanationResponseBody, XtractApiOutput.class);
+
+                    System.out.println("HTTP status: " + methodExplanationStatusCode);
+                    System.out.println("recommendationExplanationResponseBody: " + recommendationExplanationResponseBody);
+
+                } catch (IOException ex) {
+                    // Code run in case of error,
+                    // treat here or save and show in UI later
+                    response = "Error in request: " + ex.getMessage();
+                } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             }
